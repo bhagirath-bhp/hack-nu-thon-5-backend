@@ -1,7 +1,9 @@
 from fastapi import FastAPI , Header
 from typing import Annotated, List, Union
-
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from helper import ask_ai , initialize_embeddings , initialize_llm 
+# from clearBuffer import clearMemory
 import os 
 from dotenv import load_dotenv
 load_dotenv()
@@ -17,11 +19,14 @@ app.add_middleware(
 )
 
 
+initialize_llm()
+initialize_embeddings()
 
 
 @app.post("/ask" ,  summary="pass value using header")
-async def read_items(user_query:str , company_name:str):
-    return {"response": "ask" }
+async def read_items(user_query:str):
+    return {"response": str(ask_ai(companyName = "similarity", query= user_query)) }
+
 
 
 @app.get("/")
