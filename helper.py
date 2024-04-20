@@ -50,7 +50,7 @@ def load_vectorDB(collection_name):
 
 
 def ask_ai(companyName , query):
-    template = """
+    template = """ you are a salse person. try to give human like response according to user query and given context.
     Use the following context (delimited by <ctx></ctx>) and the chat history (delimited by <hs></hs>) to answer the question:
     ------
     <ctx>
@@ -86,6 +86,6 @@ def ask_ai(companyName , query):
             "memory": user_memory
         }
     )
-    print("prompt -------------------------- " , vector_db.similarity_search(query=query , k=10))
+    # print("prompt -------------------------- " , vector_db.similarity_search(query=query , k=10))
     res = posgres_qa(query)
     return res["result"]
