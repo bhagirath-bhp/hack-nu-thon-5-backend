@@ -9,6 +9,9 @@ from langchain.chains import RetrievalQA
 from langchain.memory import ConversationBufferWindowMemory
 from langchain import PromptTemplate
 from langchain.memory import PostgresChatMessageHistory
+    
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
 # from dataCreation import get_docs
 load_dotenv()
 
@@ -47,13 +50,27 @@ def load_vectorDB(collection_name):
 )
     
 
+def get_prompt(query):
+    #  get tags
+    model = ChatGoogleGenerativeAI(model="gemini-pro", convert_system_message_to_human=True)
+    tags = model(
+        [
+            SystemMessage(content="you are a tag generator. you have to assign tags to user query which can be used to suggest products to the customer .do not type any other things only provide tags. tags could be any color , size , gender ,cloth fabric in [Cotton polyester Silk Blend Acrylic Wool Jean Polyester Faux Georgette Silk Jacquard] or design catagory in [Casual Sports Regular Birthday Formal Clubwear Partywear Funky Sweater casual Aesthetic Sport traditional]. if you do not find any relavant tags then return None."),
+            HumanMessage(content=query),
+        ]
+    )
+    print("tags" , tags.content )
+    # similarity search based on tags
+    simmcontext = ""
+    if tags.content.strip() not in ["None" , "none" , ""] : 
+        simtag = vector_db.similarity_search(query=tags.content , k=3)
+        simmcontext = simtag[0].page_content + " --- " + simtag[1].page_content + " --- " + simtag[2].page_content    
+        print("sim context " , simmcontext )
 
-
-def ask_ai(companyName , query):
-    template = """ you are a salse person. try to give human like response according to user query and given context.
-    Use the following context (delimited by <ctx></ctx>) and the chat history (delimited by <hs></hs>) to answer the question:
+    return """ you are a salse person. try to give human like response according to user query and given context.
+    Use the following context (delimited by <ctx></ctx>) and the chat history (delimited by <hs></hs>) to answer the question. try to give full product names in response :
     ------
-    <ctx>
+    <ctx> """ + simmcontext + """
     {context}
     </ctx>
     ------
@@ -64,6 +81,10 @@ def ask_ai(companyName , query):
     {question}
     Answer:
     """
+def ask_ai(companyName , query):
+    # load vector db
+    load_vectorDB(companyName)
+    template = get_prompt(query)
     prompt = PromptTemplate(
         input_variables=["history", "context", "question"],
         template=template,
@@ -73,8 +94,6 @@ def ask_ai(companyName , query):
         connection_string=os.getenv("POSTGRES_CONNECTION_STRING"),
         session_id=companyName,)
     user_memory = ConversationBufferWindowMemory(k=3 , memory_key="history" , chat_memory= history, input_key="question")
-    # load vector db
-    load_vectorDB(companyName)
     posgres_qa = RetrievalQA.from_chain_type(
         llm=llm,
         chain_type='stuff',
