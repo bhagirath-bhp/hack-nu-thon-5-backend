@@ -53,30 +53,50 @@ def load_vectorDB(collection_name):
 def get_prompt(query):
     #  get tags
     model = ChatGoogleGenerativeAI(model="gemini-pro", convert_system_message_to_human=True)
-    tags = model(
+    filter = model(
         [
-            SystemMessage(content="you are a tag generator. you have to assign tags to user query which can be used to suggest products to the customer .do not type any other things only provide tags. tags could be any color , size , gender ,cloth fabric in [Cotton polyester Silk Blend Acrylic Wool Jean Polyester Faux Georgette Silk Jacquard] or design catagory in [Casual Sports Regular Birthday Formal Clubwear Partywear Funky Sweater casual Aesthetic Sport traditional]. if you do not find any relavant tags then return None."),
+            SystemMessage(content="you are a tag generator. you have to provide tags which can be used to suggest clothing products to the customer. for example - summer, - party wear, - partywear, - winter, -marriage. suggest tags based on user query. do not type any other things only provide tags."),
             HumanMessage(content=query),
-        ]
-    )
-    print("tags" , tags.content )
+        ])
+    # dictionary for additional tags
+    tag_dictionary = {
+    "summer" : ["cotton" , "shorts" , "relax fit" , "loose fit" , "light color" , "white" , "tank tops", "summer" , "summer shorts" ],
+    "partywear" : ["funky" , 'partywear' , "party wear" , "aesthetic" , "silk"],
+    "winter" : ["sweater" , 'sweat shirt' , "jacket" , "thermal clothes"],
+    "marriage" : ["traditional" , "saree" , "lehenga" , "kurta" , "dhoti" , "wedding"],
+    }
+
+    tags = " "
+    for i in filter.content.split("-"):
+        tags = tags + i.strip() + " "
+        if i.strip() == "summer" :
+            tags = tags + i.strip() + " " + " ".join(tag_dictionary["summer"])
+        if i.strip() == "partywear" :
+            tags = tags + i.strip() + " " + " ".join(tag_dictionary["partywear"])
+        if i.strip() == "winter" :
+            tags = tags + i.strip() + " " + " ".join(tag_dictionary["winter"])
+        if i.strip() == "marriage" :
+            tags = tags + i.strip() + " " + " ".join(tag_dictionary["marriage"])
+
+        
+
+            
+    # print("filter" , filter.content)
+    print("tags" , tags)
+
     # similarity search based on tags
     simmcontext = ""
-    if tags.content.strip() not in ["None" , "none" , ""] : 
-        simtag = vector_db.similarity_search(query=tags.content , k=3)
+    if tags.strip() not in ["None" , "none" , ""] : 
+        simtag = vector_db.similarity_search(query=tags , k=3)
         simmcontext = simtag[0].page_content + " --- " + simtag[1].page_content + " --- " + simtag[2].page_content    
         print("sim context " , simmcontext )
 
     return """ you are a salse person. try to give human like response according to user query and given context.
-    Use the following context (delimited by <ctx></ctx>) and the chat history (delimited by <hs></hs>) to answer the question. try to give full product names in response :
+    Use the following context (delimited by <ctx></ctx>) to answer the question. try to give suggestions for two to three relevant products. try to give full product names in response :
     ------
     <ctx> """ + simmcontext + """
     {context}
     </ctx>
-    ------
-    <hs>
-    {history}
-    </hs>
     ------
     {question}
     Answer:
@@ -85,15 +105,16 @@ def ask_ai(companyName , query):
     # load vector db
     load_vectorDB(companyName)
     template = get_prompt(query)
+    print("\n\n\nprompt ----------- ",template)
     prompt = PromptTemplate(
         input_variables=["history", "context", "question"],
         template=template,
     )
     # history
-    history = PostgresChatMessageHistory(
-        connection_string=os.getenv("POSTGRES_CONNECTION_STRING"),
-        session_id=companyName,)
-    user_memory = ConversationBufferWindowMemory(k=3 , memory_key="history" , chat_memory= history, input_key="question")
+    # history = PostgresChatMessageHistory(
+    #     connection_string=os.getenv("POSTGRES_CONNECTION_STRING"),
+    #     session_id=companyName,)
+    # user_memory = ConversationBufferWindowMemory(k=3 , memory_key="history" , chat_memory= history, input_key="question")
     posgres_qa = RetrievalQA.from_chain_type(
         llm=llm,
         chain_type='stuff',
@@ -102,7 +123,7 @@ def ask_ai(companyName , query):
         chain_type_kwargs={
             # "verbose": True,
             "prompt": prompt,
-            "memory": user_memory
+            # "memory": user_memory
         }
     )
     # print("prompt -------------------------- " , vector_db.similarity_search(query=query , k=10))
